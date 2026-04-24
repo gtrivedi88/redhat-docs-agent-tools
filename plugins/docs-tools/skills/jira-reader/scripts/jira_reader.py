@@ -359,7 +359,7 @@ class JiraReader:
                 }
             return {"key": jira_id, "error": str(e)}
 
-    def _fetch_children(self, ticket_key, max_children=25):
+    def _fetch_children(self, ticket_key, max_children=25, fetch_details=False):
         """
         Fetch children via parent = KEY and "Epic Link" = KEY JQL queries.
 
@@ -370,22 +370,32 @@ class JiraReader:
         seen_keys = set()
         issues = []
 
+        base_fields = "summary,status,issuetype,priority,assignee"
+        if fetch_details:
+            base_fields += ",description,labels,components,fixVersions"
+
         # Query 1: Standard parent field
         jql1 = f"parent = {ticket_key} ORDER BY status ASC, key ASC"
         try:
-            results = self.jira.search_issues(jql1, maxResults=max_children)
+            results = self.jira.search_issues(jql1, maxResults=max_children, fields=base_fields)
             for issue in results:
                 if issue.key not in seen_keys:
                     seen_keys.add(issue.key)
                     f = issue.fields
-                    issues.append({
+                    entry = {
                         "key": issue.key,
                         "summary": f.summary,
                         "status": str(f.status) if f.status else None,
                         "issuetype": str(f.issuetype) if f.issuetype else None,
                         "priority": str(f.priority) if f.priority else None,
                         "assignee": f.assignee.displayName if f.assignee and hasattr(f.assignee, 'displayName') else None,
-                    })
+                    }
+                    if fetch_details:
+                        entry["description"] = f.description or ""
+                        entry["labels"] = f.labels if hasattr(f, 'labels') and f.labels else []
+                        entry["components"] = [str(c) for c in f.components] if hasattr(f, 'components') and f.components else []
+                        entry["fix_versions"] = [v.name for v in f.fixVersions] if hasattr(f, 'fixVersions') and f.fixVersions else []
+                    issues.append(entry)
         except Exception as e:
             errors.append(f"Children query (parent field): {e}")
 
@@ -393,19 +403,25 @@ class JiraReader:
         if self._epic_link_field:
             jql2 = f'"Epic Link" = {ticket_key} ORDER BY status ASC, key ASC'
             try:
-                results = self.jira.search_issues(jql2, maxResults=max_children)
+                results = self.jira.search_issues(jql2, maxResults=max_children, fields=base_fields)
                 for issue in results:
                     if issue.key not in seen_keys:
                         seen_keys.add(issue.key)
                         f = issue.fields
-                        issues.append({
+                        entry = {
                             "key": issue.key,
                             "summary": f.summary,
                             "status": str(f.status) if f.status else None,
                             "issuetype": str(f.issuetype) if f.issuetype else None,
                             "priority": str(f.priority) if f.priority else None,
                             "assignee": f.assignee.displayName if f.assignee and hasattr(f.assignee, 'displayName') else None,
-                        })
+                        }
+                        if fetch_details:
+                            entry["description"] = f.description or ""
+                            entry["labels"] = f.labels if hasattr(f, 'labels') and f.labels else []
+                            entry["components"] = [str(c) for c in f.components] if hasattr(f, 'components') and f.components else []
+                            entry["fix_versions"] = [v.name for v in f.fixVersions] if hasattr(f, 'fixVersions') and f.fixVersions else []
+                        issues.append(entry)
             except Exception as e:
                 errors.append(f"Children query (Epic Link): {e}")
 
@@ -419,7 +435,7 @@ class JiraReader:
             "issues": issues,
         }, errors
 
-    def _fetch_siblings(self, ticket_key, parent_key, parent_source, max_siblings=25):
+    def _fetch_siblings(self, ticket_key, parent_key, parent_source, max_siblings=25, fetch_details=False):
         """
         Fetch sibling tickets (active statuses only).
 
@@ -440,17 +456,24 @@ class JiraReader:
             f'ORDER BY status DESC, updated DESC'
         )
 
+        fields = "summary,status,issuetype"
+        if fetch_details:
+            fields += ",description"
+
         try:
-            results = self.jira.search_issues(jql, maxResults=max_siblings)
+            results = self.jira.search_issues(jql, maxResults=max_siblings, fields=fields)
             issues = []
             for issue in results:
                 f = issue.fields
-                issues.append({
+                entry = {
                     "key": issue.key,
                     "summary": f.summary,
                     "status": str(f.status) if f.status else None,
                     "issuetype": str(f.issuetype) if f.issuetype else None,
-                })
+                }
+                if fetch_details:
+                    entry["description"] = f.description or ""
+                issues.append(entry)
 
             total = results.total if hasattr(results, 'total') else len(issues)
             showing = len(issues)
@@ -464,11 +487,13 @@ class JiraReader:
             errors.append(f"Siblings query: {e}")
             return {"total": 0, "showing": 0, "skipped": 0, "issues": []}, errors
 
-    def _extract_issue_links(self, issue, max_links=15):
+    def _extract_issue_links(self, issue, max_links=15, fetch_details=False):
         """
         Extract issue link summaries from an issue object.
 
-        No additional API calls needed — data is embedded in the issuelinks field.
+        When fetch_details is False, no additional API calls are needed — data is
+        embedded in the issuelinks field. When True, makes one API call per linked
+        issue to fetch its description.
         """
         raw_links = issue.fields.issuelinks if hasattr(issue.fields, 'issuelinks') else []
         links = []
@@ -485,14 +510,21 @@ class JiraReader:
             else:
                 continue
 
-            links.append({
+            entry = {
                 "key": linked_issue.key,
                 "direction": direction,
                 "link_type": link_type.name,
                 "summary": linked_issue.fields.summary if hasattr(linked_issue.fields, 'summary') else None,
                 "status": str(linked_issue.fields.status) if hasattr(linked_issue.fields, 'status') and linked_issue.fields.status else None,
                 "issuetype": str(linked_issue.fields.issuetype) if hasattr(linked_issue.fields, 'issuetype') and linked_issue.fields.issuetype else None,
-            })
+            }
+            if fetch_details:
+                try:
+                    detail = self.jira.issue(linked_issue.key, fields="description")
+                    entry["description"] = detail.fields.description or ""
+                except Exception:
+                    entry["description"] = ""
+            links.append(entry)
 
             if len(links) >= max_links:
                 break
@@ -551,7 +583,7 @@ class JiraReader:
         auto_discovered = {"pull_requests": pull_requests, "google_docs": google_docs}
         return web_links, auto_discovered, errors
 
-    def get_ticket_graph(self, ticket_key, max_children=25, max_siblings=25, max_links=15):
+    def get_ticket_graph(self, ticket_key, max_children=25, max_siblings=25, max_links=15, fetch_details=False):
         """
         Traverse the JIRA ticket graph: parent, children, siblings, issue links, web links.
 
@@ -562,6 +594,7 @@ class JiraReader:
             max_children: Maximum children to fetch
             max_siblings: Maximum siblings to fetch
             max_links: Maximum issue links to extract
+            fetch_details: If True, include descriptions, labels, components for children/siblings/links
 
         Returns:
             Dictionary with full graph traversal results
@@ -589,17 +622,17 @@ class JiraReader:
                 parent_info["source"] = parent_source
 
         # Step 4: Fetch children
-        children, errors = self._fetch_children(ticket_key, max_children)
+        children, errors = self._fetch_children(ticket_key, max_children, fetch_details)
         all_errors.extend(errors)
 
         # Step 5: Fetch siblings (only if parent exists)
         siblings = {"total": 0, "showing": 0, "skipped": 0, "issues": []}
         if parent_key and parent_source:
-            siblings, errors = self._fetch_siblings(ticket_key, parent_key, parent_source, max_siblings)
+            siblings, errors = self._fetch_siblings(ticket_key, parent_key, parent_source, max_siblings, fetch_details)
             all_errors.extend(errors)
 
-        # Step 6: Extract issue links (no extra API calls)
-        issue_links = self._extract_issue_links(issue, max_links)
+        # Step 6: Extract issue links (extra API calls per link when fetch_details is True)
+        issue_links = self._extract_issue_links(issue, max_links, fetch_details)
 
         # Step 7: Fetch remote/web links and classify URLs
         web_links, auto_discovered, errors = self._fetch_remote_links(ticket_key)
@@ -656,7 +689,7 @@ def main():
     parser.add_argument(
         '--fetch-details',
         action='store_true',
-        help='Fetch full details for each issue (slow). By default, JQL searches return fast summaries only.'
+        help='Fetch full details for each issue (slow). For JQL: returns full issue data. For graph: includes descriptions, labels, components for children/siblings/links.'
     )
     parser.add_argument(
         '--max-children',
@@ -693,6 +726,7 @@ def main():
                 max_children=args.max_children,
                 max_siblings=args.max_siblings,
                 max_links=args.max_links,
+                fetch_details=args.fetch_details,
             )
             print(json.dumps(result, indent=2))
             if result.get("error"):
