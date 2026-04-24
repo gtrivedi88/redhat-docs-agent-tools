@@ -36,6 +36,37 @@
 
     Restart your terminal and Claude Code for changes to take effect.
 
+### Optional: Slack MCP server
+
+The Slack MCP server allows the requirements analyst and docs planner agents to search Slack conversations for additional context — SME decisions, design rationale, and technical details that may not be captured in JIRA tickets or PRs. This integration is optional; the workflow operates normally without it.
+
+**Benefits:**
+
+- Search Slack channels and DMs for discussions about a JIRA ticket or feature
+- Read full thread conversations to recover decision rationale
+- Access channel history for context during documentation research
+- Identify SMEs who have been discussing a feature
+
+**Prerequisites:** Python 3, Podman or Docker
+
+**Setup:**
+
+```bash
+python3 <(curl -fsSL https://raw.githubusercontent.com/redhat-community-ai-tools/slack-mcp/main/scripts/setup-slack-mcp.py)
+```
+
+The setup script handles everything: Python venv, Playwright, token extraction, wrapper script, and Claude Code registration. You only need to log into Slack when the browser opens and provide a channel ID for server logs (use a self-DM or Slackbot DM).
+
+After setup, restart Claude Code to activate the Slack MCP server.
+
+To refresh tokens when they expire:
+
+```bash
+python3 ~/.local/share/slack-mcp/setup-slack-mcp.py --refresh-tokens
+```
+
+GitHub repo: [redhat-community-ai-tools/slack-mcp](https://github.com/redhat-community-ai-tools/slack-mcp)
+
 ## Customizing the docs workflow
 
 The docs orchestrator (`/docs-orchestrator`) runs a YAML-defined step list. You can customize it per-repo without modifying the plugin.

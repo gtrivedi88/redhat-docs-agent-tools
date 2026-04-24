@@ -139,7 +139,31 @@ The `--graph` flag discovers custom field IDs, fetches the parent, children, sib
 - Find configuration options and parameters
 - Record file paths with line numbers (e.g., `src/feature.ts:45-67`)
 
-### 1.5. Web search expansion
+### 1.5. Slack research (optional)
+
+If Slack MCP tools are available (`mcp__slack__*`), search Slack for additional context that may not be captured in JIRA tickets or PRs. Skip this section if Slack MCP is not configured.
+
+**Search strategy:**
+
+1. **Search by ticket key**: Use `mcp__slack__search_messages` with the JIRA ticket key (e.g., `PROJECT-123`) to find discussions across all accessible channels.
+2. **Search by feature name**: Search for the feature name, component name, or technical terms from the ticket summary.
+3. **Follow threads**: When search results reference a thread, use `mcp__slack__get_thread` to read the full conversation for context.
+
+**What to look for:**
+
+- SME decisions or rationale not captured in JIRA ("we decided to..." / "the reason is...")
+- Technical details shared in engineering channels
+- Design discussions that inform documentation scope
+- Stakeholder concerns or user pain points mentioned in conversation
+
+**Record Slack findings:**
+
+Add relevant Slack context to the "Sources consulted" section:
+- `Slack thread in #channel-name (YYYY-MM-DD): [Summary of relevant discussion]`
+
+**Important:** Slack conversations are informal. Cross-reference any technical claims against the codebase or JIRA before treating them as documentation-ready facts.
+
+### 1.6. Web search expansion
 
 After gathering initial source materials, expand your research using web search to find additional context, upstream documentation, and industry best practices.
 
