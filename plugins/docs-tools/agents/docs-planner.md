@@ -50,7 +50,10 @@ If access to JIRA or Git is needed for supplemental research and fails, **STOP I
    - Summarize each requirement into a dense factual summary (max 150 words per source)
    - Focus on: user-facing changes, API/config changes, new or removed capabilities
    - Flag ambiguous or incomplete requirements for follow-up
-   - If Slack MCP tools are available (`mcp__slack__*`), search Slack for additional context on ambiguous requirements — search by ticket key or feature name to find SME decisions, design rationale, or technical details not captured in JIRA. Cross-reference any Slack findings against the codebase before incorporating them.
+   - **Slack supplemental lookup** (optional — skip if `mcp__slack__*` tools are not available):
+     - For each ambiguous or incomplete requirement, search Slack by ticket key or feature name: `mcp__slack__search_messages query: "PROJECT-123"`
+     - Follow threads with `mcp__slack__get_thread` to recover decision rationale
+     - Verify any Slack findings against the codebase or JIRA before incorporating — Slack is informal and may be outdated
 
 3. **Assess documentation impact**:
    - Grade each requirement using the impact assessment criteria below

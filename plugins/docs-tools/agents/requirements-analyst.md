@@ -141,27 +141,57 @@ The `--graph` flag discovers custom field IDs, fetches the parent, children, sib
 
 ### 1.5. Slack research (optional)
 
-If Slack MCP tools are available (`mcp__slack__*`), search Slack for additional context that may not be captured in JIRA tickets or PRs. Skip this section if Slack MCP is not configured.
+If Slack MCP tools are available (`mcp__slack__*`), search Slack for additional context that may not be captured in JIRA tickets or PRs. Skip this section entirely if Slack MCP is not configured — it is not an error.
 
 **Search strategy:**
 
-1. **Search by ticket key**: Use `mcp__slack__search_messages` with the JIRA ticket key (e.g., `PROJECT-123`) to find discussions across all accessible channels.
-2. **Search by feature name**: Search for the feature name, component name, or technical terms from the ticket summary.
-3. **Follow threads**: When search results reference a thread, use `mcp__slack__get_thread` to read the full conversation for context.
+Run these searches in order. Stop early if the first search already provides sufficient context.
 
-**What to look for:**
+1. **Search by ticket key** — searches all channels the user has access to:
+   ```
+   mcp__slack__search_messages query: "PROJECT-123"
+   ```
 
-- SME decisions or rationale not captured in JIRA ("we decided to..." / "the reason is...")
-- Technical details shared in engineering channels
-- Design discussions that inform documentation scope
-- Stakeholder concerns or user pain points mentioned in conversation
+2. **Search by feature name** — use the feature name, component, or key technical terms from the ticket:
+   ```
+   mcp__slack__search_messages query: "PKCE OAuth flow"
+   ```
+
+3. **Follow threads** — when a search result references a conversation worth reading in full, fetch the complete thread using the channel ID and timestamp from the result:
+   ```
+   mcp__slack__get_thread channel_id: "C0A2WFPBR29" thread_ts: "1776943948.748319"
+   ```
+
+4. **Identify channels by name** (optional) — if you know a likely channel name:
+   ```
+   mcp__slack__get_channel_id_by_name channel_name: "devspaces-docs"
+   ```
+
+**What to extract:**
+
+| Signal | Example phrases | Action |
+|--------|----------------|--------|
+| Decision rationale | "we decided to...", "the reason is..." | Record as context for requirements |
+| Technical details | API names, config flags, architecture notes | Cross-reference against codebase |
+| Scope discussions | "out of scope", "deferred to next release" | Flag as scope boundary |
+| SME identification | People actively discussing the feature | Add to "Who can provide information" |
+| User pain points | "customers are hitting...", "support tickets about..." | Elevate requirement priority |
 
 **Record Slack findings:**
 
-Add relevant Slack context to the "Sources consulted" section:
-- `Slack thread in #channel-name (YYYY-MM-DD): [Summary of relevant discussion]`
+Add relevant Slack context to the "Sources consulted" section using these formats:
 
-**Important:** Slack conversations are informal. Cross-reference any technical claims against the codebase or JIRA before treating them as documentation-ready facts.
+- Channel thread: `Slack thread in #channel-name (YYYY-MM-DD): [Summary of relevant discussion]`
+- Direct message: `Slack DM with @username (YYYY-MM-DD): [Summary of relevant discussion]`
+
+**Example:**
+```
+### Slack discussions
+- Slack thread in #team-devspaces (2026-04-20): SME confirmed backup/restore feature targets GA in 3.27. Decision to use CRDs instead of ConfigMap for state storage.
+- Slack DM with @ibuziuk (2026-02-23): PM confirmed stakeholder list for JTBD meeting — UX, Marketing, TAM, and Support contacts identified.
+```
+
+**Reliability guardrail:** Slack conversations are informal and may contain outdated or speculative information. Before incorporating any technical claim into requirements, verify it against at least one authoritative source (codebase, JIRA ticket, or PR). If a Slack finding contradicts JIRA, trust JIRA.
 
 ### 1.6. Web search expansion
 
